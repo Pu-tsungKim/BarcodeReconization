@@ -1,7 +1,8 @@
 %%%%%%%%%%%%%%%%%%%%%
 %barcode located use connected component
 %recognition use SVM  
-% 2015/1/6 edited 
+%sharpen image
+% 2015/1/7 edited 
 %%%%%%%%%%%%%%%%%%%%%
 clc;
 clf;
@@ -18,23 +19,23 @@ numRegionwidthBottom=3;
 whRate=0.2;
 yPosition=0.5;
 hdiff=4;
-pjWHrate=1;
-pjHrate=0.55;
+pjWHrate=0.3;
+yCentroid=0.35;
+pjWidth=3;
 
 side1=16;
 side2=16;
-centroidPosition=20;
-pjthres=0.2;
+
 %% input image
-I0=imread('barcode18.jpg');
+I0=imread('barcode19.jpg');
 I0=imresize(I0,[488 648]);
 figure;
 imshow(I0);
 % I0 = imsharpen(I0,'Radius',5,'Amount',2);
 % figure, imshow(I0), title('Sharpened Image');
-I0=adaHSV_Saturation(I0);%% 呼叫副程式做飽和度增強
-figure;
-imshow(I0);
+% I0=adaHSV_Saturation(I0);%% 呼叫副程式做飽和度增強
+% figure;
+% imshow(I0);
 %% gradient
 I=double(I0);
 G=gradient(I);
@@ -85,6 +86,9 @@ stats=regionprops(LB,'Basic');
 for rgnProps=1:length(stats);
     if (stats(rgnProps).BoundingBox(3)/stats(rgnProps).BoundingBox(4)<3) && (stats(rgnProps).BoundingBox(3)/stats(rgnProps).BoundingBox(4)>Toprate)
          subimage1=imcrop(I0,stats(rgnProps).BoundingBox);
+         subimage1 = imsharpen(subimage1,'Radius',3,'Amount',2.5);   %%% 3    2
+         figure;
+         imshow(subimage1);
          level = graythresh(subimage1);  %%ostu
          bw=im2bw(subimage1,level);
 %         bw=imprBernsen(subimage1);
@@ -153,16 +157,20 @@ for rgnProps=1:length(stats);
                 [initial]=criticalPoint(t2,0.05,cropa) ;
                 start=1;End=2;
                 for i=1:length(initial)
-                    width=initial(i,End)-initial(i,start);
+                    width=abs(initial(i,End)-initial(i,start));
                     pjNumber=imcrop(cropI,[ initial(i,start) 1 width cropa]);
-                      if width>0.05*cropb
+                      if width>0.05*cropb %0.05
                        t3 =vprojection(pjNumber);   
-                       [initial2]=criticalPoint2(t3,0.27,cropa) ;           
+                       [initial2]=criticalPoint2(t3,0.2,cropa) ;      
                                   for i=1:length(initial2)
-                                         width2=initial2(i,End)-initial2(i,start);
+                                         width2=abs(initial2(i,End)-initial2(i,start));
                                          divNumber=imcrop(pjNumber,[ initial2(i,start) 1 width2 cropa]);
-                                        [LN,NUMb]=bwlabel(divNumber); lilnum=regionprops(LN,'Basic');
-                                         if lilnum.BoundingBox(4)/lilnum.BoundingBox(3)>pjWHrate   &&   lilnum.BoundingBox(4)>pjHrate*cropa
+                                         
+                                         [segIm,segIn]=size(divNumber);pixel=sum(sum(divNumber));
+                                         xi = ones(segIm,1)*[1:segIn]; yi = [1:segIm]'*ones(1,segIn);
+                                         meany = sum(sum(divNumber.*yi))/pixel;
+                        
+                                         if pixel>segIm*segIn*pjWHrate && meany>segIm*yCentroid
                                          figure;
                                          imshow(divNumber);
                                          pjcount=pjcount+1
@@ -178,8 +186,11 @@ for rgnProps=1:length(stats);
                             if width<=0;
                                 continue;
                             end  
-                             [LN,NUMb]=bwlabel(pjNumber); lilnum=regionprops(LN,'Basic');
-                             if lilnum.BoundingBox(4)/lilnum.BoundingBox(3)>pjWHrate   &&   lilnum.BoundingBox(4)>pjHrate*cropa
+                              [segIm,segIn]=size(pjNumber);pixel=sum(sum(pjNumber));
+                              xi = ones(segIm,1)*[1:segIn]; yi = [1:segIm]'*ones(1,segIn); 
+                              meany = sum(sum(pjNumber.*yi))/pixel;
+%                         
+                            if  (pixel>segIm*segIn*pjWHrate) && (meany>segIm*yCentroid) && (segIn>pjWidth)
                                  figure;
                                  imshow(pjNumber);
                                  pjcount=pjcount+1
@@ -188,7 +199,7 @@ for rgnProps=1:length(stats);
                                  segI=double(imresize(segI,[side1 side2]));
                                  vseg=reshape(segI,[1,side1*side2]);
                                  TestSample(pjcount,:)=vseg;
-                             end
+                           end
                       end %% end of width threshold
                  end
          end %% end of 13 number count 
