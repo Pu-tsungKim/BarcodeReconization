@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%
 %barcode located use connected component
 %recognition use SVM  
-% 2015/12/24 edited 
+% 2015/12/29 edited 
 %%%%%%%%%%%%%%%%%%%%%
 clc;
 clf;
@@ -10,16 +10,23 @@ close all;
 %% set parameters
 gthres=1.5;
 neggthres=-gthres;
-erodeRate=0.04;
-cropthres=0.4;
-numlong=0.25;
 Toprate=1;
-numberheight=0.55;
-side=16;
+numRegionHeighTop=0.3;
+numRegionHeighBottom=5;
+numRegionwidthTop=0.3;
+numRegionwidthBottom=3;
+whRate=0.2;
+yPosition=0.5;
+hdiff=4;
+pjWHrate=1;
+pjHrate=0.55;
+
+side1=16;
+side2=16;
 centroidPosition=20;
 pjthres=0.2;
 %% input image
-I0=imread('barcode16.jpg');
+I0=imread('barcode17.jpg');
 I0=imresize(I0,[488 648]);
 figure;
 imshow(I0);
@@ -73,11 +80,11 @@ imshow(dia1);
 %% regionprop
 [LB,NUM]=bwlabel(dia1,8); %% connected component 
 stats=regionprops(LB,'Basic');
-for irgnProps=1:length(stats);
-    if (stats(irgnProps).BoundingBox(3)/stats(irgnProps).BoundingBox(4)<3) && (stats(irgnProps).BoundingBox(3)/stats(irgnProps).BoundingBox(4)>Toprate)
-         subimage1=imcrop(I0,stats(irgnProps).BoundingBox);
+for rgnProps=1:length(stats);
+    if (stats(rgnProps).BoundingBox(3)/stats(rgnProps).BoundingBox(4)<3) && (stats(rgnProps).BoundingBox(3)/stats(rgnProps).BoundingBox(4)>Toprate)
+         subimage1=imcrop(I0,stats(rgnProps).BoundingBox);
          level = graythresh(subimage1);  %%ostu
-      bw=im2bw(subimage1,level);
+         bw=im2bw(subimage1,level);
 %         bw=imprBernsen(subimage1);
 
         [rotI,Theta]=barcode_rotate4(bw);  %%%%%%%%%rotateimage
@@ -85,156 +92,116 @@ for irgnProps=1:length(stats);
         figure;
         imshow(rotI);
         [rota,rotb]=size(rotI);
-      % bw=im2bw(rotI);
-       y_mask= [-1 0 1;-2 0 2;-1 0 1];
-       sobl = abs(filter2(y_mask,rotI));
-        figure;
-        imshow(sobl);
-        for i=1:5:300
-            k=i*0.01;
-        sobSE=strel('rectangle',[round(k*stats(irgnProps).BoundingBox(4)) 2]);%%%for erode
-        soberd =imerode(sobl,sobSE);
-              if   sum(sum(soberd==1))<erodeRate*stats(irgnProps).Area
-                     figure;
-                     imshow(soberd);
-                  break;
-              end    
-        end
-        figure;
-        imshow(soberd);
-         %% horizontal projection
-        t=zeros(1,255);
-        [Accm,Accn]=size(soberd);
-   for i=1:Accm %%for loop vertical projection
-     t(i)=0;
-     for j=1:Accn
-     if soberd(i,j)>=1
-         t(i)=t(i)+1;
-     end
-     end 
-     end%%end for projection
-  t=uint8(t);
-   figure;
-   bar(t);          
-       if sum(sum(soberd==1)) >50 %% ³Q«I»k«á¹³¯À­È
-        sobSE=strel('rectangle',[2 round(0.0625*rotb)]);%%% for dialate
-        sobdia=imdilate(soberd,sobSE);
-         figure;
-        imshow(sobdia);
-        title('after mophorlogy');
-      %%%projection for cropping number
-        [m1,n1]=size(sobdia);
-        rowEnd=0;
-        for i=1:m1
-           k=m1-i+1;
-            prjsum=0;
-            for j=1:n1
-                if  sobdia(k,j)>=1
-                    prjsum=prjsum+1;
-                end
-            end
-            if prjsum/n1>=cropthres
-                rowEnd=k;
-                break;
-            end
-        end 
-    
-        code=imcrop(rotI,[1,rowEnd+0.03*stats(irgnProps).BoundingBox(4),n1,numlong*stats(irgnProps).BoundingBox(4)]);
-           figure;
-        imshow(code);
-        AccI=Accurateplate(code); 
-        figure;
-        imshow(AccI);
-        %% horizontal projection
-        t=zeros(1,255);
-        [Accm,Accn]=size(AccI);
-   for i=1:Accm %%for loop vertical projection
-     t(i)=0;
-     for j=1:Accn
-     if AccI(i,j)>0
-         t(i)=t(i)+1;
-     end
-     end 
-     end%%end for projection
-  t=uint8(t);
-   figure;
-   bar(t);
-   %% critical point
-start=1;End=2;
-label=start;index=1;
-% critical(1,1)=1; critical(2,2)=1;
-    for i=1:length(t)
-        if label==start
-           if t(i)>Accn*pjthres
-             critical(index,label)=i;
-             label=End;
-           end
-
-        end 
- 
-        if label==End
-             if t(i)<Accn*pjthres
-              critical(index,label)=i;
-              label=start;
-              index=index+1;
-             end
-        end
-    end
-    if critical(1,2)-critical(1,1)<Accm*0.4
-   AccI2=imcrop(AccI,[1,critical(2,1),Accn,Accm-critical(2,1)]);
-    else
-  AccI2=AccI;
-    end
-        %% segmentation
-        [m2,n2]=size(AccI2);
-%         AccI2=bwareaopen(AccI2,round(0.01*m2*n2));  
-        [LB2,NUM2]=bwlabel(AccI2,4); %%4 connected component 
-         substats=regionprops(LB2,'Basic');
-         numcount=0;
+  %% find number region
+         [subLB,NUM2]=bwlabel(rotI,8); %% connected component 
+         substats=regionprops(subLB,'Basic');
+         NBoundingBox=zeros(length(substats),4);
+         count=0;
          for i=1:length(substats)
-              if  (substats(i).BoundingBox(3)>5) && (substats(i).BoundingBox(4)>m2*numberheight)...
-                      && (substats(i).Centroid(1)>n2/centroidPosition)  && (substats(i).Centroid(1)< (n2*(centroidPosition-1)/centroidPosition))
-                  numimage=imcrop(AccI2,substats(i).BoundingBox);
-                  [a,b]=size(numimage);
-                  if  b>a             
-                  numimage=imcrop(AccI2,[substats(i).BoundingBox(1),substats(i).BoundingBox(2)...
-                      substats(i).BoundingBox(3)/2,substats(i).BoundingBox(4)]);
-                  end  
-                  numcount=numcount+1;
-                  figure;
-                  imshow(numimage);
-                   %Rcgn=numrecognition(numimage);
-      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Support Vector Mechine %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                 numimage=imresize(numimage,[side side]);
-                 numimage =double( reshape(numimage,[1,side*side])); 
-                 TestSample(numcount,:)=numimage;
-      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                              
-                  end               
+             if (substats(i).BoundingBox(4)<rota*numRegionHeighTop) && (substats(i).BoundingBox(4)>numRegionHeighBottom)...
+                     &&(substats(i).BoundingBox(3)<stats(rgnProps).BoundingBox(3)*numRegionwidthTop)&&(substats(i).BoundingBox(3)>numRegionwidthBottom)...
+                 && (substats(i).Centroid(2)>rota*yPosition) && (substats(i).BoundingBox(3)/substats(i).BoundingBox(4)>whRate) 
+                   count=count+1
+                   NBoundingBox(count,1:4)=substats(i).BoundingBox;
+%                    numRegion=imcrop(rotI, NBoundingBox(count,1:4));      %%test for number count 
+%                    figure;                                               %%test for number count 
+%                    imshow(numRegion)                                     %%test for number count 
+             end
+         end %% end of number region statistics
+         yStart=min( NBoundingBox(1:count,2)); 
+         yEnd=max( NBoundingBox(1:count,2)); 
+         hmax=max( NBoundingBox(1:count,4)); 
+         hmedian=median(NBoundingBox(1:count,4));
+         cropI=imcrop(rotI,[1 yStart rotb yEnd-yStart+hmax]);
+         figure;
+         imshow(cropI);
+         diffcount=0;
+         N2BoundingBox=zeros(count,4);
+         for i=1:count
+             if  abs(hmedian-NBoundingBox(i,4))>hdiff
+                 count=count-1
+             else    
+                 diffcount=diffcount+1;
+                 N2BoundingBox(diffcount,1:4)=NBoundingBox(i,1:4);
+             end
          end
-        
-    end  %loop for sum(sum(soberd)) >50
-   end   %loop for roi
-end   %loop for status
+         
+        if count <=9
+            continue;
+        end
+     %%    segmentation
+       pjcount=0;
+         if count>=13
+              for i=1:count
+                  pjcount=pjcount+1
+                  ccaNumber=imcrop(rotI,N2BoundingBox(i,1:4));
+                  figure;
+                  imshow(ccaNumber); 
+                  lv=graythresh(double(ccaNumber));
+                  segI=im2bw(ccaNumber,lv);
+                  segI=double(imresize(segI,[side1 side2]));
+                  vseg=reshape(segI,[1,side1*side2]);
+                  TestSample(pjcount,:)=vseg;
+              end
+         else   
+               
+                t2 =vprojection(cropI);
+                [cropa,cropb]=size(cropI);
+                [initial]=criticalPoint(t2,0.05,cropa) ;
+                start=1;End=2;
+                for i=1:length(initial)
+                    width=initial(i,End)-initial(i,start);
+                    pjNumber=imcrop(cropI,[ initial(i,start) 1 width cropa]);
+                      if width>0.05*cropb
+                       t3 =vprojection(pjNumber);   
+                       [initial2]=criticalPoint2(t3,0.27,cropa) ;           
+                                  for i=1:length(initial2)
+                                         width2=initial2(i,End)-initial2(i,start);
+                                         divNumber=imcrop(pjNumber,[ initial2(i,start) 1 width2 cropa]);
+                                        [LN,NUMb]=bwlabel(divNumber); lilnum=regionprops(LN,'Basic');
+                                         if lilnum.BoundingBox(4)/lilnum.BoundingBox(3)>pjWHrate   &&   lilnum.BoundingBox(4)>pjHrate*cropa
+                                         figure;
+                                         imshow(divNumber);
+                                         pjcount=pjcount+1
+                                         lv=graythresh(double(divNumber));
+                                         segI=im2bw(divNumber,lv);
+                                         segI=double(imresize(segI,[side1 side2]));
+                                         vseg=reshape(segI,[1,side1*side2]);
+                                         TestSample(pjcount,:)=vseg;                                      
+                                         end
+                                  end    
+                      else
+                          
+                            if width<=0;
+                                continue;
+                            end  
+                             [LN,NUMb]=bwlabel(pjNumber); lilnum=regionprops(LN,'Basic');
+                             if lilnum.BoundingBox(4)/lilnum.BoundingBox(3)>pjWHrate   &&   lilnum.BoundingBox(4)>pjHrate*cropa
+                                 figure;
+                                 imshow(pjNumber);
+                                 pjcount=pjcount+1
+                                 lv=graythresh(double(pjNumber));
+                                 segI=im2bw(pjNumber,lv);
+                                 segI=double(imresize(segI,[side1 side2]));
+                                 vseg=reshape(segI,[1,side1*side2]);
+                                 TestSample(pjcount,:)=vseg;
+                             end
+                      end %% end of width threshold
+                 end
+         end %% end of 13 number count 
+    
+    
+    end  
+end
 
 
 %% SVM result
-%            models=load('trainingModel.mat','models');
-%            models=models.models;
-  testlabel=zeros(numcount,1);
-            models=load('libtrainingModel5.mat','models');
-    models=models.models;
-%     for j=1:size(TestSample,1)
-%     for k=1:numclass
-%         if(svmclassify(models(k),TestSample(j,:))) 
-%             break;
-%         end
-%     end
-%     result(j) = k-1;
-% end
-  [predicted_label, accuracy, decision_values] = libsvmpredict(testlabel, TestSample, models);
-     for i=1:length(predicted_label)
-        fprintf('%d',predicted_label(i));
-        
-
-     end
+testlabel=zeros(pjcount,1);
+models=load('libtrainingModel5.mat','models');
+models=models.models;
+[predicted_label, accuracy, decision_values] = libsvmpredict(testlabel, TestSample, models);
+for i=1:length(predicted_label)
+    fprintf('%d',predicted_label(i));
+    
+    
+end
