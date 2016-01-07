@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%
 %barcode located use connected component
 %recognition use SVM  
-% 2015/12/29 edited 
+% 2015/1/6 edited 
 %%%%%%%%%%%%%%%%%%%%%
 clc;
 clf;
@@ -26,10 +26,12 @@ side2=16;
 centroidPosition=20;
 pjthres=0.2;
 %% input image
-I0=imread('barcode17.jpg');
+I0=imread('barcode18.jpg');
 I0=imresize(I0,[488 648]);
 figure;
 imshow(I0);
+% I0 = imsharpen(I0,'Radius',5,'Amount',2);
+% figure, imshow(I0), title('Sharpened Image');
 I0=adaHSV_Saturation(I0);%% 呼叫副程式做飽和度增強
 figure;
 imshow(I0);
@@ -115,6 +117,7 @@ for rgnProps=1:length(stats);
          cropI=imcrop(rotI,[1 yStart rotb yEnd-yStart+hmax]);
          figure;
          imshow(cropI);
+         
          diffcount=0;
          N2BoundingBox=zeros(count,4);
          for i=1:count
